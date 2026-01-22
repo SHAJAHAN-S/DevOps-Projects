@@ -75,7 +75,7 @@ jobs:
       working-directory: ${{ env.PROJECT_DIR }}
 
     - name: Upload apk-files directory
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: apk-files-artifact
         path: ${{ github.workspace }}/apk-files/
