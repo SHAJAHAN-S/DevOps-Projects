@@ -9,5 +9,6 @@ class MyApplication: Application() {
         Log.d("RESULT", "first -> ${com.first.getResult()}")
         Log.d("RESULT", "second -> ${com.second.getResult()}")
         Log.d("RESULT", "build config -> ${BuildConfig.DESC}")
+        Log.d("")
     }
 }
