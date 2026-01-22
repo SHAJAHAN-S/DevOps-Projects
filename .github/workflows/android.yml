@@ -1,7 +1,7 @@
 name: Android CI
 
 # --------------------------------------------------
-# 1️⃣ Triggers
+# 1️⃣ Workflow Triggers
 # --------------------------------------------------
 on:
   push:
@@ -31,7 +31,7 @@ jobs:
 
     steps:
       # --------------------------------------------
-      # Step 1: Checkout source code
+      # Step 1: Checkout code
       # --------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -63,29 +63,33 @@ jobs:
       # --------------------------------------------
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
+        working-directory: DevOps-Project-14/android-demo-app
 
       # --------------------------------------------
       # Step 5: Clean project
       # --------------------------------------------
       - name: Clean project
         run: ./gradlew clean
+        working-directory: DevOps-Project-14/android-demo-app
 
       # --------------------------------------------
       # Step 6: Run Android Lint
       # --------------------------------------------
       - name: Run Android Lint
         run: ./gradlew lint
+        working-directory: DevOps-Project-14/android-demo-app
 
       # --------------------------------------------
       # Step 7: Build project
       # --------------------------------------------
       - name: Build Android project
         run: ./gradlew build
+        working-directory: DevOps-Project-14/android-demo-app
 
       # --------------------------------------------
-      # Step 8: SonarQube Scan
+      # Step 8: SonarQube Analysis
       # --------------------------------------------
-      - name: SonarQube Analysis
+      - name: SonarQube Scan
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
@@ -95,12 +99,13 @@ jobs:
           -Dsonar.projectName=android-demo \
           -Dsonar.host.url=$SONAR_HOST_URL \
           -Dsonar.login=$SONAR_TOKEN
+        working-directory: DevOps-Project-14/android-demo-app
 
       # --------------------------------------------
-      # Step 9: Upload APK as artifact
+      # Step 9: Upload APK artifact
       # --------------------------------------------
       - name: Upload Debug APK
         uses: actions/upload-artifact@v3
         with:
           name: debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          path: DevOps-Project-14/android-demo-app/app/build/outputs/apk/debug/*.apk
