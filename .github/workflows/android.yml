@@ -1,32 +1,8 @@
-# name: Android CI
-
-# on:
-#   push:
-#     branches: [ "master" ]
-#   pull_request:
-#     branches: [ "master" ]
-
-# jobs:
-#   build:
-
-#     runs-on: ubuntu-latest
-
-#     steps:
-#     - uses: actions/checkout@v4
-#     - name: set up JDK 11
-#       uses: actions/setup-java@v4
-#       with:
-#         java-version: '11'
-#         distribution: 'temurin'
-#         cache: gradle
-
-#     - name: Grant execute permission for gradlew
-#       run: chmod +x gradlew
-#     - name: Build with Gradle
-#       run: ./gradlew build
-
 name: Android CI
 
+# --------------------------------------------------
+# 1️⃣ Triggers
+# --------------------------------------------------
 on:
   push:
     branches:
@@ -38,36 +14,93 @@ on:
       - main
       - qa
 
-# Workflow-level environment variable
+# --------------------------------------------------
+# 2️⃣ Workflow-level Environment Variables
+# --------------------------------------------------
 env:
   AWS_DEFAULT_REGION: ap-south-1
+  JAVA_VERSION: 17
 
+# --------------------------------------------------
+# 3️⃣ Jobs
+# --------------------------------------------------
 jobs:
   build:
-    name: Android CI Build
+    name: Android Build & Analysis
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout repository
-      - name: Checkout source code
+      # --------------------------------------------
+      # Step 1: Checkout source code
+      # --------------------------------------------
+      - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Setup Java
+      # --------------------------------------------
+      # Step 2: Setup Java
+      # --------------------------------------------
       - name: Set up JDK
         uses: actions/setup-java@v3
         with:
           distribution: temurin
-          java-version: 11
+          java-version: ${{ env.JAVA_VERSION }}
 
-      # Grant permission to Gradle wrapper
+      # --------------------------------------------
+      # Step 3: Cache Gradle
+      # --------------------------------------------
+      - name: Cache Gradle
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}
+
+      # --------------------------------------------
+      # Step 4: Grant execute permission
+      # --------------------------------------------
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # Clean project
+      # --------------------------------------------
+      # Step 5: Clean project
+      # --------------------------------------------
       - name: Clean project
         run: ./gradlew clean
 
-      # Run lint checks
+      # --------------------------------------------
+      # Step 6: Run Android Lint
+      # --------------------------------------------
       - name: Run Android Lint
         run: ./gradlew lint
 
+      # --------------------------------------------
+      # Step 7: Build project
+      # --------------------------------------------
+      - name: Build Android project
+        run: ./gradlew build
+
+      # --------------------------------------------
+      # Step 8: SonarQube Scan
+      # --------------------------------------------
+      - name: SonarQube Analysis
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        run: |
+          ./gradlew sonarqube \
+          -Dsonar.projectKey=android-demo \
+          -Dsonar.projectName=android-demo \
+          -Dsonar.host.url=$SONAR_HOST_URL \
+          -Dsonar.login=$SONAR_TOKEN
+
+      # --------------------------------------------
+      # Step 9: Upload APK as artifact
+      # --------------------------------------------
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v3
+        with:
+          name: debug-apk
+          path: app/build/outputs/apk/debug/*.apk
