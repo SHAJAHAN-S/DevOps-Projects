@@ -94,6 +94,7 @@ on:
       - main
       - qa
       - develop
+      - master
   pull_request:
     branches:
       - main
