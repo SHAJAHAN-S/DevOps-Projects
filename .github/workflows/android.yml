@@ -27,9 +27,6 @@
 
 name: Android CI
 
-# --------------------------------------------------
-# 1️⃣ Workflow Triggers
-# --------------------------------------------------
 on:
   push:
     branches:
@@ -41,88 +38,36 @@ on:
       - main
       - qa
 
-# --------------------------------------------------
-# 2️⃣ Workflow-level Environment Variables
-# --------------------------------------------------
+# Workflow-level environment variable
 env:
   AWS_DEFAULT_REGION: ap-south-1
-  JAVA_VERSION: 17
 
-# --------------------------------------------------
-# 3️⃣ Jobs
-# --------------------------------------------------
 jobs:
-  build-and-sonar:
-    name: Build Android App & Run SonarQube
+  build:
+    name: Android CI Build
     runs-on: ubuntu-latest
 
     steps:
-      # --------------------------------------------
-      # Step 1: Checkout source code
-      # --------------------------------------------
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      # Checkout repository
+      - name: Checkout source code
+        uses: actions/checkout@v3
 
-      # --------------------------------------------
-      # Step 2: Set up Java
-      # --------------------------------------------
+      # Setup Java
       - name: Set up JDK
         uses: actions/setup-java@v3
         with:
           distribution: temurin
-          java-version: ${{ env.JAVA_VERSION }}
+          java-version: 11
 
-      # --------------------------------------------
-      # Step 3: Cache Gradle dependencies
-      # --------------------------------------------
-      - name: Cache Gradle
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            gradle-${{ runner.os }}
-
-      # --------------------------------------------
-      # Step 4: Grant execute permission
-      # --------------------------------------------
+      # Grant permission to Gradle wrapper
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # --------------------------------------------
-      # Step 5: Build Android APK
-      # --------------------------------------------
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug
+      # Clean project
+      - name: Clean project
+        run: ./gradlew clean
 
-      # --------------------------------------------
-      # Step 6: Run SonarQube Analysis
-      # --------------------------------------------
-      - name: SonarQube Scan
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        run: |
-          ./gradlew sonarqube \
-          -Dsonar.projectKey=android-demo \
-          -Dsonar.projectName=android-demo \
-          -Dsonar.host.url=$SONAR_HOST_URL \
-          -Dsonar.login=$SONAR_TOKEN
-
-      # --------------------------------------------
-      # Step 7: Upload APK as GitHub Artifact
-      # --------------------------------------------
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: debug-apk
-          path: app/build/outputs/apk/debug/*.apk
-
-      # --------------------------------------------
-      # Step 8: Print Environment Variable (Example)
-      # --------------------------------------------
-      - name: Print AWS Region
-        run: echo "AWS Region is $AWS_DEFAULT_REGION"
+      # Run lint checks
+      - name: Run Android Lint
+        run: ./gradlew lint
 
