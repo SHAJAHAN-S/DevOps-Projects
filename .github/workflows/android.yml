@@ -1,85 +1,277 @@
-name: Android CI
+# name: Android CI
 
+# on:
+#   push:
+#     branches: [ "master" ]
+#   pull_request:
+#     branches: [ "master" ]
+
+# env:
+#   PROJECT_DIR: DevOps-Project-14/android-demo-app
+
+# jobs:
+#   build:
+#     runs-on: ubuntu-latest
+#     defaults:
+#       run:
+#         shell: bash
+
+#     steps:
+#     - name: Checkout repository
+#       uses: actions/checkout@v4
+
+#     - name: Set up JDK 11
+#       uses: actions/setup-java@v4
+#       with:
+#         java-version: '11'
+#         distribution: 'temurin'
+#         cache: gradle
+
+#     - name: Ensure Gradle wrapper exists
+#       run: |
+#         if [ ! -f "${{ env.PROJECT_DIR }}/gradlew" ]; then
+#           echo "ERROR: Gradle wrapper not found at ${{ env.PROJECT_DIR }}/gradlew"
+#           echo "Either add the Gradle wrapper to the repository or update PROJECT_DIR."
+#           exit 1
+#         fi
+
+#     - name: Grant execute permission for gradlew
+#       run: chmod +x gradlew
+#       working-directory: ${{ env.PROJECT_DIR }}
+
+#     - name: Cache Gradle packages
+#       uses: actions/cache@v4
+#       with:
+#         path: |
+#           ~/.gradle/caches
+#           ~/.gradle/wrapper
+#         key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}-${{ hashFiles('**/gradle-wrapper.properties') }}
+#         restore-keys: |
+#           ${{ runner.os }}-gradle-
+
+#     - name: Gradle Clean
+#       run: ./gradlew clean
+#       working-directory: ${{ env.PROJECT_DIR }}
+
+#     - name: Gradle Lint (optional; will not fail workflow if it returns non-zero)
+#       run: ./gradlew lint || true
+#       working-directory: ${{ env.PROJECT_DIR }}
+
+#     - name: Gradle Build (assemble & run tests)
+#       run: ./gradlew build
+#       working-directory: ${{ env.PROJECT_DIR }}
+
+#     - name: Collect APK files (if any)
+#       run: |
+#         mkdir -p ${{ github.workspace }}/apk-files/debug ${{ github.workspace }}/apk-files/release || true
+#         # copy any debug/release APKs if present
+#         shopt -s globstar || true
+#         for f in ${{ github.workspace }}/${{ env.PROJECT_DIR }}/app/build/outputs/apk/**/*.apk; do
+#           if [ -f "$f" ]; then
+#             echo "Found apk: $f"
+#             cp "$f" "${{ github.workspace }}/apk-files/$(basename "$f")" || true
+#           fi
+#         done
+#       working-directory: ${{ env.PROJECT_DIR }}
+
+#     - name: Upload apk-files directory
+#       uses: actions/upload-artifact@v4
+#       with:
+#         name: apk-files-artifact
+#         path: ${{ github.workspace }}/apk-files/
+#         if-no-files-found: ignore
+
+#     - name: Show build outputs
+#       run: ls -R "${{ env.PROJECT_DIR }}/app/build" || true
+
+
+name: Android CI and CD
+
+# 1️⃣ Workflow Triggers
 on:
   push:
-    branches: [ "master" ]
+    branches:
+      - main
+      - qa
+      - develop
   pull_request:
-    branches: [ "master" ]
+    branches:
+      - main
+      - qa
 
+# 2️⃣ Top-level Environment Variables
 env:
-  PROJECT_DIR: DevOps-Project-14/android-demo-app
+  AWS_DEFAULT_REGION: ap-south-1
+  JAVA_HOME: /usr/lib/jvm/java-11-temurin
 
 jobs:
+  # ======================
+  # 3️⃣ Build Job (CI)
+  # ======================
   build:
     runs-on: ubuntu-latest
-    defaults:
-      run:
+    outputs:
+      CURRENT_DATE_TIME: ${{ steps.date.outputs.current_date_time }}
+    steps:
+      # 3.1 Checkout Repository
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      # 3.2 Setup Java JDK
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+
+      # 3.3 Make Gradle executable
+      - name: Make Gradle Executable
+        run: chmod +x gradlew
+
+      # 3.4 Clean Project
+      - name: Clean Project
+        run: ./gradlew clean
+
+      # 3.5 Lint Code
+      - name: Lint Code
+        run: ./gradlew lint
+
+      # 3.6 Build Project
+      - name: Build Project
+        run: ./gradlew build
+
+      # 3.7 Run Jacoco Test Coverage
+      - name: Jacoco Test
+        run: ./gradlew jacocoTest
+
+      # 3.8 Cache Gradle & SonarQube Packages
+      - name: Cache Gradle
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Cache SonarQube
+        uses: actions/cache@v3
+        with:
+          path: ~/.sonar/cache
+          key: sonar-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            sonar-${{ runner.os }}-
+
+      # 3.9 SonarQube Analysis
+      - name: SonarQube Analysis
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_URL: ${{ secrets.SONAR_URL }}
+        run: ./gradlew sonarqube -Dsonar.projectKey=AndroidProject
+
+      # 3.10 Create Date/Time Output
+      - name: Date and Time
+        id: date
+        run: echo "::set-output name=current_date_time::$(date +'%d-%m-%Y-%H-%M-%S')"
+
+      # 3.11 Copy APK files to Directory
+      - name: Copy APKs
+        run: |
+          mkdir -p apk-files/debug
+          mkdir -p apk-files/release
+          cp app/build/outputs/apk/debug/app-debug.apk apk-files/debug/app-debug-${{ steps.date.outputs.current_date_time }}.apk
+          cp app/build/outputs/apk/release/app-release-unsigned.apk apk-files/release/app-release-unsigned-${{ steps.date.outputs.current_date_time }}.apk
+
+      # 3.12 Upload APK Artifacts
+      - name: Upload APK Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: apk-files
+          path: apk-files
+          if-no-files-found: ignore
+
+      # 3.13 Notify Teams (Optional for CI)
+      - name: Teams Notification - CI
+        uses: some/teams-action@v1
+        with:
+          webhook-url: ${{ secrets.TEAMS_WEBHOOK }}
+          message: "Android CI Build Completed Successfully!"
+
+  # ======================
+  # 4️⃣ Deploy Job (CD)
+  # ======================
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/qa' || github.ref == 'refs/heads/main'
+    steps:
+      # 4.1 Checkout
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      # 4.2 Download APK Artifacts from Build Job
+      - name: Download APKs
+        uses: actions/download-artifact@v3
+        with:
+          name: apk-files
+          path: apk-files
+
+      # 4.3 Display Downloaded Files
+      - name: List Downloaded APKs
+        run: ls -R apk-files
+
+      # 4.4 Get Public IP of Runner
+      - name: Get Public IP
+        id: public_ip
+        uses: haythem/public-ip@1.3
+
+      # 4.5 Add Runner IP to AWS Security Group
+      - name: Add Runner to SG
+        run: |
+          aws ec2 authorize-security-group-ingress \
+            --group-id ${{ secrets.EC2_SG_ID }} \
+            --protocol tcp --port 8082 \
+            --cidr ${{ steps.public_ip.outputs.ip }}/32
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET }}
+
+      # 4.6 Upload APK to JFrog
+      - name: Upload APK to JFrog
+        run: |
+          if [[ "${GITHUB_REF##*/}" == "qa" ]]; then
+            folder="qa"
+          else
+            folder="master"
+          fi
+          mkdir -p apk-files/$folder/debug
+          mkdir -p apk-files/$folder/release
+          cp apk-files/debug/* apk-files/$folder/debug/
+          cp apk-files/release/* apk-files/$folder/release/
+          jf rt u --url ${{ secrets.JF_URL }} \
+                   --user ${{ secrets.JF_USER }} \
+                   --password ${{ secrets.JF_PASSWORD }} \
+                   "apk-files/$folder/debug/app-debug-${{ needs.build.outputs.CURRENT_DATE_TIME }}.apk" \
+                   android-artifact/
         shell: bash
 
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      # 4.7 Remove Runner IP from Security Group (Always Run)
+      - name: Remove Runner from SG
+        if: always()
+        run: |
+          aws ec2 revoke-security-group-ingress \
+            --group-id ${{ secrets.EC2_SG_ID }} \
+            --protocol tcp --port 8082 \
+            --cidr ${{ steps.public_ip.outputs.ip }}/32
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET }}
 
-    - name: Set up JDK 11
-      uses: actions/setup-java@v4
-      with:
-        java-version: '11'
-        distribution: 'temurin'
-        cache: gradle
+      # 4.8 Teams Notification - Deployment
+      - name: Teams Notification - Deployment
+        uses: some/teams-action@v1
+        with:
+          webhook-url: ${{ secrets.TEAMS_WEBHOOK }}
+          message: "Android APK Deployed Successfully to JFrog!"
 
-    - name: Ensure Gradle wrapper exists
-      run: |
-        if [ ! -f "${{ env.PROJECT_DIR }}/gradlew" ]; then
-          echo "ERROR: Gradle wrapper not found at ${{ env.PROJECT_DIR }}/gradlew"
-          echo "Either add the Gradle wrapper to the repository or update PROJECT_DIR."
-          exit 1
-        fi
-
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
-      working-directory: ${{ env.PROJECT_DIR }}
-
-    - name: Cache Gradle packages
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.gradle/caches
-          ~/.gradle/wrapper
-        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}-${{ hashFiles('**/gradle-wrapper.properties') }}
-        restore-keys: |
-          ${{ runner.os }}-gradle-
-
-    - name: Gradle Clean
-      run: ./gradlew clean
-      working-directory: ${{ env.PROJECT_DIR }}
-
-    - name: Gradle Lint (optional; will not fail workflow if it returns non-zero)
-      run: ./gradlew lint || true
-      working-directory: ${{ env.PROJECT_DIR }}
-
-    - name: Gradle Build (assemble & run tests)
-      run: ./gradlew build
-      working-directory: ${{ env.PROJECT_DIR }}
-
-    - name: Collect APK files (if any)
-      run: |
-        mkdir -p ${{ github.workspace }}/apk-files/debug ${{ github.workspace }}/apk-files/release || true
-        # copy any debug/release APKs if present
-        shopt -s globstar || true
-        for f in ${{ github.workspace }}/${{ env.PROJECT_DIR }}/app/build/outputs/apk/**/*.apk; do
-          if [ -f "$f" ]; then
-            echo "Found apk: $f"
-            cp "$f" "${{ github.workspace }}/apk-files/$(basename "$f")" || true
-          fi
-        done
-      working-directory: ${{ env.PROJECT_DIR }}
-
-    - name: Upload apk-files directory
-      uses: actions/upload-artifact@v4
-      with:
-        name: apk-files-artifact
-        path: ${{ github.workspace }}/apk-files/
-        if-no-files-found: ignore
-
-    - name: Show build outputs
-      run: ls -R "${{ env.PROJECT_DIR }}/app/build" || true
